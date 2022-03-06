@@ -1,43 +1,38 @@
 import re
 import requests
 from bs4 import BeautifulSoup
-import csv
 
-toons = []
 naver_url = 'https://comic.naver.com'
 index = ['가','나','다','라','마','바','사','아','자','차','카','타','파','하','A','0']
 
-for order in index:
-    url = naver_url + '/webtoon/creationList?prefix={0}&view=list'.format(order)
-    html = requests.get(url)
-    soup = BeautifulSoup(html.text, 'html.parser')
+def extract_base(item):
+    a = item.find('a', href=True)
+    if not a: return
 
-    for item in soup.find_all('tr'):
-        a = item.find('a', href=True)
-        if not a: continue
+    titleId = int(re.findall("\d+", a['href'])[0])
+    title = item.find('strong').string
+    end = True if "(완결)" in item.find('td', class_="subject").get_text() else False
+    rating = float(item.find('div', class_="rating_type").find('strong').string)
+    date = item.find('td', class_="date").string.strip()
 
-        titleId = int(re.findall("\d+", a['href'])[0])
-        title = item.find('strong').string
-        rating = float(item.find('div', class_="rating_type").find('strong').string)
-        date = item.find('td', class_="date").string.strip()
+    return {
+        'id': titleId,
+        'title': title,
+        'rating': rating,
+        'completed': end,
+        'date': date,
+        'link': naver_url + a['href']
+    }
 
-        toon = {
-            'id': titleId,
-            'title': title,
-            'rating': rating,
-            'date': date,
-            'link': naver_url + a['href']
-        }
-        toons.append(toon)
+def get_data():
+    toons = []
+    for order in index:
+        url = naver_url + '/webtoon/creationList?prefix={0}&view=list'.format(order)
+        html = requests.get(url)
+        soup = BeautifulSoup(html.text, 'html.parser')
 
-
-def save_file(toons):
-    file = open("naver.csv", mode="w", encoding="UTF8")
-    writer = csv.writer(file)
-    writer.writerow(["id", "title", "rating", "date", "link"])
-    for toon in toons:
-        writer.writerow(list(toon.values()))
-    
-    return 0
-
-save_file(toons)
+        for item in soup.find_all('tr'):
+            toon = extract_base(item)
+            if not toon: continue
+            toons.append(toon)
+    return toons
